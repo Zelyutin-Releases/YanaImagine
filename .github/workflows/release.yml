@@ -14,6 +14,11 @@ on:
         description: Что нового (видно всем на странице релиза)
         required: false
         type: string
+      minor:
+        description: Новые возможности (0.1.x → 0.2.0), а не только исправления
+        required: false
+        type: boolean
+        default: false
 permissions:
   contents: write # this repo's releases
 concurrency: release
@@ -45,10 +50,11 @@ jobs:
           UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
           GH_TOKEN: ${{ github.token }}
           NOTES: ${{ inputs.notes }}
+          MINOR: ${{ inputs.minor && '--minor' || '' }}
           WINEDEBUG: -all
         run: |
           # The version commit and tag come from the bot: it is plain to see they are automatic.
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if [ -n "$NOTES" ]; then node scripts/release.mjs --publish --notes "$NOTES"
-          else node scripts/release.mjs --publish; fi
+          if [ -n "$NOTES" ]; then node scripts/release.mjs --publish $MINOR --notes "$NOTES"
+          else node scripts/release.mjs --publish $MINOR; fi
