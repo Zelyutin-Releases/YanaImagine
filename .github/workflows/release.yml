@@ -5,7 +5,7 @@
 # write for the version commit and tag). Both secrets sit in the "release" environment, released only after Danil approves.
 # Logs are public: nothing here prints code or secrets.
 name: release
-run-name: Релиз ${{ inputs.notes }}
+run-name: ${{ inputs.dry_run && 'Пробная сборка' || 'Релиз' }} # "what's new" goes to the release page, not here
 on:
   workflow_dispatch:
     inputs:
@@ -27,7 +27,7 @@ jobs:
     environment: release
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: Zelyutin/YanaImagine
           token: ${{ secrets.CODE_TOKEN }}
@@ -39,8 +39,8 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends wine wine64 wine32:i386 > /dev/null
           wine --version
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
@@ -52,13 +52,14 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run }}
           WINEDEBUG: -all
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # The version commit and tag are authored as Danil; the noreply address links them to his account without his real mail.
+          git config user.name "Danil Zelyutin"
+          git config user.email "24490408+Zelyutin@users.noreply.github.com"
           if [ "$DRY_RUN" = "true" ]; then node scripts/release.mjs
           elif [ -n "$NOTES" ]; then node scripts/release.mjs --publish --notes "$NOTES"
           else node scripts/release.mjs --publish; fi
       - if: inputs.dry_run
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: installers
           path: dist/*/*-Setup-*.exe
