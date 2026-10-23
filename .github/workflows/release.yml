@@ -5,7 +5,8 @@
 # write for the version commit and tag). Both secrets sit in the "release" environment, released only after Danil approves.
 # Logs are public: nothing here prints code or secrets.
 name: release
-run-name: ${{ inputs.dry_run && 'Пробная сборка' || 'Релиз' }} # "what's new" goes to the release page, not here
+run-name: Релиз # "what's new" goes to the release page, not here
+# Trial builds (no secrets, no approval) run in the code repo: .github/workflows/installers.yml.
 on:
   workflow_dispatch:
     inputs:
@@ -13,11 +14,6 @@ on:
         description: Что нового (видно всем на странице релиза)
         required: false
         type: string
-      dry_run:
-        description: Пробная сборка без публикации (установщики — артефактом на 3 дня)
-        required: false
-        type: boolean
-        default: false
 permissions:
   contents: write # this repo's releases
 concurrency: release
@@ -49,18 +45,10 @@ jobs:
           UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
           GH_TOKEN: ${{ github.token }}
           NOTES: ${{ inputs.notes }}
-          DRY_RUN: ${{ inputs.dry_run }}
           WINEDEBUG: -all
         run: |
-          # The version commit and tag are authored as Danil; the noreply address links them to his account without his real mail.
-          git config user.name "Danil Zelyutin"
-          git config user.email "24490408+Zelyutin@users.noreply.github.com"
-          if [ "$DRY_RUN" = "true" ]; then node scripts/release.mjs
-          elif [ -n "$NOTES" ]; then node scripts/release.mjs --publish --notes "$NOTES"
+          # The version commit and tag come from the bot: it is plain to see they are automatic.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -n "$NOTES" ]; then node scripts/release.mjs --publish --notes "$NOTES"
           else node scripts/release.mjs --publish; fi
-      - if: inputs.dry_run
-        uses: actions/upload-artifact@v7
-        with:
-          name: installers
-          path: dist/*/*-Setup-*.exe
-          retention-days: 3
