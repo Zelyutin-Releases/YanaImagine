@@ -1,0 +1,65 @@
+# Release workflow of the PUBLIC releases repo Zelyutin-Releases/YanaImagine (source copy: scripts/releases-repo/ in the
+# private code repo; `node scripts/releases-repo/push.mjs` uploads it). It lives there and not in the code repo because
+# required reviewers ("Approve" with one tap) and Actions minutes are free only in public repos.
+# The code is checked out from the private repo with CODE_TOKEN (fine-grained PAT: that one repo, Contents read/write —
+# write for the version commit and tag). Both secrets sit in the "release" environment, released only after Danil approves.
+# Logs are public: nothing here prints code or secrets.
+name: release
+run-name: Релиз ${{ inputs.notes }}
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: Что нового (видно всем на странице релиза)
+        required: false
+        type: string
+      dry_run:
+        description: Пробная сборка без публикации (установщики — артефактом на 3 дня)
+        required: false
+        type: boolean
+        default: false
+permissions:
+  contents: write # this repo's releases
+concurrency: release
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: Zelyutin/YanaImagine
+          token: ${{ secrets.CODE_TOKEN }}
+          fetch-depth: 0
+      # electron-builder needs Wine on Linux: icon and version info in the .exe, and the NSIS uninstaller.
+      - name: Wine
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends wine64 wine32 > /dev/null
+          wine --version
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - name: Build, sign, publish
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ inputs.notes }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          WINEDEBUG: -all
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ "$DRY_RUN" = "true" ]; then node scripts/release.mjs
+          elif [ -n "$NOTES" ]; then node scripts/release.mjs --publish --notes "$NOTES"
+          else node scripts/release.mjs --publish; fi
+      - if: inputs.dry_run
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers
+          path: dist/*/*-Setup-*.exe
+          retention-days: 3
