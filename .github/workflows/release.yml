@@ -4,12 +4,17 @@
 # The code is checked out from the private repo with CODE_TOKEN (fine-grained PAT: that one repo, Contents read/write —
 # write for the version commit and tag). Both secrets sit in the "release" environment, released only after Danil approves.
 # Logs are public: nothing here prints code or secrets.
-name: release
-run-name: Релиз # "what's new" goes to the release page, not here
+name: Релиз
+# The version is in the run's title (Actions list, GitHub app, the approval request); "what's new" goes to the release page.
+run-name: Релиз ${{ inputs.version || 'без номера' }}${{ (inputs.minor && ' · новые возможности') || '' }}
 # Trial builds (no secrets, no approval) run in the code repo: .github/workflows/installers.yml.
 on:
   workflow_dispatch:
     inputs:
+      version:
+        description: Какая версия выйдет, например 0.3.4 (сборка остановится, если выйдет другая)
+        required: false
+        type: string
       notes:
         description: Что нового (видно всем на странице релиза)
         required: false
@@ -24,6 +29,7 @@ permissions:
 concurrency: release
 jobs:
   release:
+    name: Yana Imagine и Imagine Host ${{ inputs.version }}
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: 40
@@ -50,11 +56,12 @@ jobs:
           UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
           GH_TOKEN: ${{ github.token }}
           NOTES: ${{ inputs.notes }}
-          MINOR: ${{ inputs.minor && '--minor' || '' }}
+          MINOR: ${{ (inputs.minor && '--minor') || '' }}
+          EXPECT: ${{ inputs.version }}
           WINEDEBUG: -all
         run: |
           # The version commit and tag come from the bot: it is plain to see they are automatic.
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if [ -n "$NOTES" ]; then node scripts/release.mjs --publish $MINOR --notes "$NOTES"
-          else node scripts/release.mjs --publish $MINOR; fi
+          if [ -n "$NOTES" ]; then node scripts/release.mjs --publish $MINOR ${EXPECT:+--expect "$EXPECT"} --notes "$NOTES"
+          else node scripts/release.mjs --publish $MINOR ${EXPECT:+--expect "$EXPECT"}; fi
